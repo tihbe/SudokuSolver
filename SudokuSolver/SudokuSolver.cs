@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -6,119 +8,82 @@ namespace SudokuSolver
 {
     class SudokuSolver
     {
-        public StringBuilder Board;
-        private const int MAX_ITERATION_OVER_BOARD = 5000;
-        private int[,] arrayOfPossibilities = new int[9 * 9, 9]; //0: possible; 1: not possible
-        static int numberOfFailed = 0;
-
         static void Main(string[] args)
         {
             string sudokus = System.IO.File.ReadAllText("sudokus.txt");
             string[] suds = Regex.Split(sudokus, @"(Grid\s\d{2})\n((?:\d{9}\n?){9})");
+            double output = 0;
             for (int number = 2; number < suds.Length; number += 3)
             {
                 string sudoku = suds[number].Replace("\n", "");
                 SudokuSolver s = new SudokuSolver { Board = new StringBuilder(sudoku) };
                 s.SolveBoard();
                 s.PrintBoard();
+                StringBuilder top3leftNum = new StringBuilder();
+                top3leftNum.Append(s.Board[0]);
+                top3leftNum.Append(s.Board[1]);
+                top3leftNum.Append(s.Board[2]);
+                output += int.Parse(top3leftNum.ToString());
             }
-            Console.WriteLine(numberOfFailed);
+            Console.WriteLine(output);
             Console.ReadLine();
         }
 
+        public StringBuilder Board;
+
         public void SolveBoard()
         {
-            iterateOverBoard();
             if (boardIsSolved())
                 return;
 
-            string initialBoard = Board.ToString();
-            int[,] initialArrayOfPossibilities = new int[9*9,9];
-            for (int i = 0; i < 9 * 9; i++)
-                for (int j = 0; j < 9; j++)
-                    initialArrayOfPossibilities[i, j] = arrayOfPossibilities[i, j];
+            StringBuilder solvedBoard = new StringBuilder();
+            bool BoardIsSolvable = FindNumberAtPosition(Board, 0, out solvedBoard);
+            if (BoardIsSolvable)
+                Board = solvedBoard;
+            else
+                Console.WriteLine("This board is not possible");
 
-            bool boardUnsolved = true;
 
-            for (int x = 0; x < 9 && boardUnsolved; x++)
-            {
-                for (int y = 0; y < 9 && boardUnsolved; y++)
-                {
-                    int currentPositionInBoard = x + 9 * y;
-                    for (int n = 0; n < 9 && boardUnsolved; n++)
-                    {
-                        if (initialArrayOfPossibilities[currentPositionInBoard, n] == 0)
-                        {
-                            Board[currentPositionInBoard] = Convert.ToChar(n + 49);
-                            iterateOverBoard();
-                            if (boardIsSolved())
-                            {
-                                boardUnsolved = false;
-                            } else
-                            {
-                                Board = new StringBuilder(initialBoard);
-                                initialArrayOfPossibilities[currentPositionInBoard, n] = 1;
-                                for (int i = 0; i < 9 * 9; i++)
-                                    for (int j = 0; j < 9; j++)
-                                        arrayOfPossibilities[i, j] = initialArrayOfPossibilities[i, j];
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (boardUnsolved)
-            {
-                Console.Write("Failed to solve board\n");
-                numberOfFailed++;
-            }
-                
-            return;
         }
 
-        private void iterateOverBoard()
+        private bool FindNumberAtPosition(StringBuilder initialBoard, int currentPosition, out StringBuilder nextBoard)
         {
-            string _initialBoard;
-            for (int interationOverBoard = 0; interationOverBoard < MAX_ITERATION_OVER_BOARD; interationOverBoard++)
+            nextBoard = new StringBuilder();
+            if (currentPosition >= 81)
             {
-                _initialBoard = Board.ToString();
-                for (int x = 0; x < 9; x++)
-                {
-                    for (int y = 0; y < 9; y++)
-                    {
-                        int currentPositionInBoard = x + 9 * y;
-                        if (Board[currentPositionInBoard] == '0')
-                        {
-                            char numberFound = '\0';
-                            for (int numberToTry = 0; numberToTry < 9; numberToTry++)
-                            {
-                                if (arrayOfPossibilities[currentPositionInBoard, numberToTry] == 1)
-                                    continue;
-                                char n = Convert.ToChar(numberToTry + 49);
-                                if (!isInRow(n, y) && !isInColumn(n, x) && !isInSquare(n, (int)(x / 3), (int)(y / 3)))
-                                {
-                                    if (numberFound == '\0')
-                                        numberFound = n;
-                                    else
-                                    {
-                                        numberFound = '\0';
-                                        break;
-                                    }
-                                }
-                                else
-                                    arrayOfPossibilities[currentPositionInBoard, numberToTry] = 1;
-                            }
-                            if (numberFound != '\0')
-                            {
-                                Board[currentPositionInBoard] = numberFound;
-                            }
-                        }
-                    }
-                }
-                //If the board is not "moving" anymore
-                if (_initialBoard == Board.ToString())
-                    break;
+                nextBoard = initialBoard;
+                return true;
             }
+
+            if (initialBoard[currentPosition] != '0')
+                return FindNumberAtPosition(initialBoard, currentPosition + 1, out nextBoard);
+                
+            int x = currentPosition % 9;
+            int y = (currentPosition - x) / 9;
+            List<char> possibilities = Possibilities(initialBoard, x, y);
+            if (possibilities.Count == 0)
+                return false;
+            else if (possibilities.Count == 1)
+            {
+                initialBoard[currentPosition] = possibilities.First();
+                return FindNumberAtPosition(initialBoard, currentPosition + 1, out nextBoard);
+            }
+            else
+            {
+                foreach (char possibility in possibilities)
+                {
+                    StringBuilder newBoard = new StringBuilder(initialBoard.ToString());
+                    newBoard[currentPosition] = possibility;
+
+                    bool boardSolved = FindNumberAtPosition(newBoard, currentPosition + 1, out nextBoard);
+                    if (!boardSolved)
+                    {
+                        continue;
+                    }
+                    return true;
+                }
+            }
+            return false;
         }
 
         public void PrintBoard()
@@ -131,29 +96,54 @@ namespace SudokuSolver
             return !Board.ToString().Contains("0");
         }
 
-        private bool isInRow(char num, int row)
+        private List<char> Possibilities(StringBuilder board, int x, int y)
         {
-            for (int x = 0; x<9; x++)
-                if (Board[x + row * 9] == num)
-                    return true;
-            return false;
+            List<char> possibilities = new List<char> {'1', '2', '3', '4', '5', '6', '7', '8', '9' };
+            return possibilities
+                .Except(NumbersInRow(board, y))
+                .Except(NumbersInColumn(board, x))
+                .Except(NumbersInSquare(board, x / 3, y/3))
+                .ToList();
         }
 
-        private bool isInColumn(char num, int column)
+        private List<char> NumbersInRow(StringBuilder board, int row)
         {
-            for (int y = 0; y < 9; y++)
-                if (Board[column + y * 9] == num)
-                    return true;
-            return false;
+            List<char> numbersInRow = new List<char>();
+            for (int x = 0; x < 9; x++)
+            {
+                char n = board[x + row * 9];
+                if (n != '0')
+                    numbersInRow.Add(n);
+            }
+
+            return numbersInRow;
         }
-        
-        private bool isInSquare(char num, int positionSquareX, int positionSquareY)
+
+        private List<char> NumbersInColumn(StringBuilder board, int column)
         {
+            List<char> NumbersInColumn = new List<char>();
+            for (int y = 0; y < 9; y++)
+            {
+                char n = board[column + y * 9];
+                if (n != '0')
+                    NumbersInColumn.Add(n);
+            }
+
+            return NumbersInColumn;
+        }
+
+        private List<char> NumbersInSquare(StringBuilder board, int posX, int posY)
+        {
+            List<char> numbersInSquare = new List<char>();
             for (int x = 0; x < 3; x++)
                 for (int y = 0; y < 3; y++)
-                    if (Board[positionSquareX*3 + x + (positionSquareY*3 + y) * 9] == num)
-                        return true;
-            return false;
+                {
+                    char n = board[posX * 3 + x + (posY * 3 + y) * 9];
+                    if (n != '0')
+                        numbersInSquare.Add(n);
+                }
+
+            return numbersInSquare;
         }
     }
 }
