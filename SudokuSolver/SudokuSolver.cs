@@ -10,22 +10,39 @@ namespace SudokuSolver
     {
         static void Main(string[] args)
         {
-            string sudokus = System.IO.File.ReadAllText("sudokus.txt");
-            string[] suds = Regex.Split(sudokus, @"(Grid\s\d{2})\n((?:\d{9}\n?){9})");
-            double output = 0;
-            for (int number = 2; number < suds.Length; number += 3)
+            if (args.Length > 0)
             {
-                string sudoku = suds[number].Replace("\n", "");
-                SudokuSolver s = new SudokuSolver { Board = new StringBuilder(sudoku) };
-                s.SolveBoard();
-                s.PrintBoard();
-                StringBuilder top3leftNum = new StringBuilder();
-                top3leftNum.Append(s.Board[0]);
-                top3leftNum.Append(s.Board[1]);
-                top3leftNum.Append(s.Board[2]);
-                output += int.Parse(top3leftNum.ToString());
+                //Any sudoku passed as argument
+                foreach (string sudoku in args)
+                {
+                    SudokuSolver s = new SudokuSolver { Board = new StringBuilder(sudoku) };
+                    s.SolveBoard();
+                    s.PrintBoard();
+                    Console.WriteLine(); 
+                }
+            } else
+            {
+                //Project euler problem 96, parsing sudoku.txt before
+                string sudokusFile = System.IO.File.ReadAllText("sudokus.txt");
+                string[] sudokus = Regex.Split(sudokusFile, @"(Grid\s\d{2})\n((?:\d{9}\n?){9})");
+                double output = 0;
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                
+                for (int number = 2; number < sudokus.Length; number += 3)
+                {
+                    string sudoku = sudokus[number].Replace("\n", "");
+                    SudokuSolver s = new SudokuSolver { Board = new StringBuilder(sudoku) };
+                    s.SolveBoard();
+                    output += int.Parse(s.Board.ToString().Substring(0, 3));
+                }
+                timer.Stop();
+                Console.WriteLine("Solved {0} sudokus in {1} ms and the " +
+                                  "sum of the 3-digit numbers found at " +
+                                  "the top left is {2}.",
+                                   sudokus.Length/3,
+                                   timer.ElapsedMilliseconds, 
+                                   output);
             }
-            Console.WriteLine(output);
             Console.ReadLine();
         }
 
@@ -42,12 +59,11 @@ namespace SudokuSolver
                 Board = solvedBoard;
             else
                 Console.WriteLine("This board is not possible");
-
-
         }
 
         private bool FindNumberAtPosition(StringBuilder initialBoard, int currentPosition, out StringBuilder nextBoard)
         {
+            //Recursive approch
             nextBoard = new StringBuilder();
             if (currentPosition >= 81)
             {
